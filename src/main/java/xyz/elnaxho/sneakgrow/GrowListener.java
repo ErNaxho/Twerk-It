@@ -30,6 +30,7 @@ public class GrowListener implements Listener {
     private final Set<java.util.UUID> enabledPlayers;
     private final Random random = new Random();
     private final Map<Material, TreeType> saplingTreeTypes = new HashMap<>();
+    private final Map<UUID, Long> lastBoneMealWarningTime = new HashMap<>();
 
     public GrowListener(Main plugin, ConfigManager config, Set<java.util.UUID> enabledPlayers) {
         this.plugin = plugin;
@@ -103,15 +104,15 @@ public class GrowListener implements Listener {
     }
 
     private void processGrowth(Player player, List<Location> path) {
-        if (config.isBoneMealUse() && !player.getInventory().contains(Material.BONE_MEAL)) {
-            player.sendMessage(config.getMessageNoBoneMeal());
+        PlayerInventory inventory = player.getInventory();
+        if (config.isBoneMealUse() && !inventory.contains(Material.BONE_MEAL)) {
+            sendBoneMealWarning(player);
             return;
         }
 
         ItemStack hoe = null;
         Integer hoeSlot = null;
         if (config.isHoeUse()) {
-            PlayerInventory inventory = player.getInventory();
             ItemStack mainHand = inventory.getItemInMainHand();
             if (isHoe(mainHand)) {
                 hoe = mainHand;
@@ -160,6 +161,9 @@ public class GrowListener implements Listener {
 
                         if (tryGrowCrop(block)) {
                             changes++;
+                            if (config.isBoneMealUse()) {
+                                consumeBoneMeal(inventory, player);
+                            }
                             if (config.isHoeUse() && hoe != null && hoeSlot != null) {
                                 hoeBroken = damageHoe(hoe, hoeSlot, player);
                             }
@@ -172,6 +176,37 @@ public class GrowListener implements Listener {
         if (changes > 0 && config.isHoeUse() && hoeBroken) {
             // Stop further growth when the hoe breaks.
         }
+    }
+
+    private void consumeBoneMeal(PlayerInventory inventory, Player player) {
+        int boneMealSlot = inventory.first(Material.BONE_MEAL);
+        if (boneMealSlot < 0) {
+            return;
+        }
+        ItemStack boneMeal = inventory.getItem(boneMealSlot);
+        if (boneMeal == null) {
+            return;
+        }
+
+        int amount = boneMeal.getAmount() - 1;
+        if (amount <= 0) {
+            inventory.setItem(boneMealSlot, null);
+        } else {
+            boneMeal.setAmount(amount);
+            inventory.setItem(boneMealSlot, boneMeal);
+        }
+    }
+
+    private void sendBoneMealWarning(Player player) {
+        long now = System.currentTimeMillis();
+        UUID playerId = player.getUniqueId();
+        long lastWarning = lastBoneMealWarningTime.getOrDefault(playerId, 0L);
+        if (now - lastWarning < config.getMessageNoBoneMealCooldownMs()) {
+            return;
+        }
+
+        lastBoneMealWarningTime.put(playerId, now);
+        player.sendTitle(config.getMessageNoBoneMealTitle(), "", 10, config.getMessageNoBoneMealTitleDuration(), 10);
     }
 
     private boolean isHoe(ItemStack itemStack) {

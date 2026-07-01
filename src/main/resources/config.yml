@@ -1,6 +1,6 @@
 yamlsettings:
-  growth-chance: 15  # percentage (0-100) chance a block grows when sneaking/sprinting
-  growth-radius: 4    # radius in blocks around the player where crops/trees are searched for
+  growth-chance: 100  # percentage (0-100) chance a block grows when sneaking/sprinting
+  growth-radius: 20    # radius in blocks around the player where crops/trees are searched for
   bone-meal-use: false   # if true, the player needs bone meal in their inventory
   hoe-use: false          # if true, the player needs a hoe in hand/inventory
   growth-chance-on-toggle-on: true
@@ -9,6 +9,9 @@ yamlsettings:
 
 messages:
   no-bone-meal: "&cYou don't have bone meal to grow the crops."
+  no-bone-meal-title: "&cNo bone meal available!"
+  no-bone-meal-title-duration: 100
+  no-bone-meal-cooldown-ms: 5000
   no-hoe: "&cYou need a hoe to grow the crops."
   toggle-on: "&aSneakGrow enabled."
   toggle-off: "&cSneakGrow disabled."

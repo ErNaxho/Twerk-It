@@ -27,6 +27,9 @@ public class ConfigManager {
     private boolean stageGrowing = true;
 
     private String messageNoBoneMeal = "&cYou don't have bone meal to grow the crops.";
+    private String messageNoBoneMealTitle = "&cYou don't have bone meal to grow the crops.";
+    private int messageNoBoneMealTitleDuration = 100;
+    private int messageNoBoneMealCooldownMs = 5000;
     private String messageNoHoe = "&cYou need a hoe to grow the crops.";
     private String messageToggleOn = "&aSneakGrow enabled.";
     private String messageToggleOff = "&cSneakGrow disabled.";
@@ -51,6 +54,9 @@ public class ConfigManager {
             stageGrowing = config.getBoolean("yamlsettings.stage-growing", true);
 
             messageNoBoneMeal = translate(config.getString("messages.no-bone-meal", messageNoBoneMeal));
+            messageNoBoneMealTitle = translate(config.getString("messages.no-bone-meal-title", messageNoBoneMealTitle));
+            messageNoBoneMealTitleDuration = clamp(config.getInt("messages.no-bone-meal-title-duration", messageNoBoneMealTitleDuration), 0, 1000);
+            messageNoBoneMealCooldownMs = clamp(config.getInt("messages.no-bone-meal-cooldown-ms", messageNoBoneMealCooldownMs), 0, 60000);
             messageNoHoe = translate(config.getString("messages.no-hoe", messageNoHoe));
             messageToggleOn = translate(config.getString("messages.toggle-on", messageToggleOn));
             messageToggleOff = translate(config.getString("messages.toggle-off", messageToggleOff));
@@ -120,6 +126,18 @@ public class ConfigManager {
 
     public String getMessageNoBoneMeal() {
         return messageNoBoneMeal;
+    }
+
+    public String getMessageNoBoneMealTitle() {
+        return messageNoBoneMealTitle;
+    }
+
+    public int getMessageNoBoneMealTitleDuration() {
+        return messageNoBoneMealTitleDuration;
+    }
+
+    public int getMessageNoBoneMealCooldownMs() {
+        return messageNoBoneMealCooldownMs;
     }
 
     public String getMessageNoHoe() {
