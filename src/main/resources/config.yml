@@ -1,0 +1,37 @@
+yamlsettings:
+  growth-chance: 15  # percentage (0-100) chance a block grows when sneaking/sprinting
+  growth-radius: 4    # radius in blocks around the player where crops/trees are searched for
+  bone-meal-use: false   # if true, the player needs bone meal in their inventory
+  hoe-use: false          # if true, the player needs a hoe in hand/inventory
+  growth-chance-on-toggle-on: true
+  growth-chance-on-toggle-off: false
+  stage-growing: true     # if true crops grow by one stage; false jumps to max stage
+
+messages:
+  no-bone-meal: "&cYou don't have bone meal to grow the crops."
+  no-hoe: "&cYou need a hoe to grow the crops."
+  toggle-on: "&aSneakGrow enabled."
+  toggle-off: "&cSneakGrow disabled."
+  reload-success: "&aConfiguration reloaded successfully."
+  no-permission: "&cYou don't have permission to do this."
+
+crops:
+  WHEAT: true
+  CARROTS: true
+  POTATOES: true
+  BEETROOTS: true
+  NETHER_WART: true
+  SUGAR_CANE: true
+  COCOA: true
+  MELON_STEM: true
+  PUMPKIN_STEM: true
+  OAK_SAPLING: true
+  SPRUCE_SAPLING: true
+  BIRCH_SAPLING: true
+  JUNGLE_SAPLING: true
+  ACACIA_SAPLING: true
+  DARK_OAK_SAPLING: true
+  CHERRY_SAPLING: true
+  BAMBOO_SAPLING: true
+
+disabled-crops: []

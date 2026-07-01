@@ -1,0 +1,18 @@
+name: SneakGrow
+main: xyz.elnaxho.sneakgrow.Main
+version: 1.0.0
+api-version: '1.21'
+description: SneakGrow advances crops and trees when players sneak or sprint nearby.
+commands:
+  grow:
+    description: Toggle SneakGrow or reload configuration.
+    aliases: [sneakgrow]
+    usage: /grow [enable|disable|reload]
+    permission: sneakgrow.use
+permissions:
+  sneakgrow.use:
+    description: Allows a player to use SneakGrow.
+    default: true
+  sneakgrow.reload:
+    description: Allows a player to reload SneakGrow config.
+    default: op
