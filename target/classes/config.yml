@@ -1,23 +1,75 @@
-yamlsettings:
-  growth-chance: 100  # percentage (0-100) chance a block grows when sneaking/sprinting
-  growth-radius: 20    # radius in blocks around the player where crops/trees are searched for
-  bone-meal-use: false   # if true, the player needs bone meal in their inventory
-  hoe-use: false          # if true, the player needs a hoe in hand/inventory
-  growth-chance-on-toggle-on: true
-  growth-chance-on-toggle-off: false
-  stage-growing: true     # if true crops grow by one stage; false jumps to max stage
+# SneakGrow configuration
+
+# When true, prints detailed debug information to console prefixed with
+# "[SneakGrow Debug]". Keep this false on production servers.
+debug: false
+
+worldguard:
+  # When true (and WorldGuard is installed), the custom "autogrow" and
+  # "autoplant" region flags are respected. Set to false to ignore
+  # WorldGuard entirely even if it's installed.
+  enabled: true
+
+autogrow:
+  # Area around the player that is scanned for growable blocks.
+  # 1 = only the block the player is standing on.
+  # N = a sphere of radius (N - 1) blocks around the player. No hard cap.
+  area: 4
+
+  # Percentage (0-100) chance each eligible block grows per trigger.
+  growth-chance: 100
+
+  # If true, the player must have bone meal in their inventory for AutoGrow
+  # to work at all; one bone meal is consumed per trigger that grows anything.
+  bone-meal-use: false
+
+  # If true, the player must be holding (or carrying) a hoe for AutoGrow to work.
+  hoe-use: false
+
+  # If true, crops advance by exactly one growth stage per trigger.
+  # If false, crops jump straight to their maximum growth stage.
+  stage-growing: true
+
+autoplant:
+  # Area around the player that is scanned for plantable soil.
+  area: 4
+
+  plant-farmland: true
+  plant-soul-sand: true
+
+  # Seed/item materials AutoPlant will use on farmland, in priority order
+  # (the first one found in the player's inventory is used).
+  farmland-seeds:
+    - WHEAT_SEEDS
+    - BEETROOT_SEEDS
+    - CARROT
+    - POTATO
+    - PITCHER_POD
+    - TORCHFLOWER_SEEDS
+
+  # Items AutoPlant will use on soul sand.
+  soul-sand-seeds:
+    - NETHER_WART
 
 messages:
   no-bone-meal: "&cYou don't have bone meal to grow the crops."
-  no-bone-meal-title: "&cNo bone meal available!"
-  no-bone-meal-title-duration: 100
-  no-bone-meal-cooldown-ms: 5000
   no-hoe: "&cYou need a hoe to grow the crops."
-  toggle-on: "&aSneakGrow enabled."
-  toggle-off: "&cSneakGrow disabled."
+  grow-both-on: "&aAutoGrow enabled (Sneak + Move)."
+  grow-both-off: "&cAutoGrow disabled (Sneak + Move)."
+  grow-sneak-on: "&aSneak Grow enabled."
+  grow-sneak-off: "&cSneak Grow disabled."
+  grow-move-on: "&aMove Grow enabled."
+  grow-move-off: "&cMove Grow disabled."
+  plant-on: "&aAutoPlant enabled."
+  plant-off: "&cAutoPlant disabled."
   reload-success: "&aConfiguration reloaded successfully."
   no-permission: "&cYou don't have permission to do this."
+  players-only: "&cThis command can only be used by a player."
 
+# Ageable crop/tree blocks AutoGrow is allowed to advance.
+# Saplings do NOT need to be listed here - sapling growth (1x1 and 2x2
+# vanilla layouts alike) is handled generically and only triggers from
+# Sneak Grow, never Move Grow.
 crops:
   WHEAT: true
   CARROTS: true
@@ -28,13 +80,8 @@ crops:
   COCOA: true
   MELON_STEM: true
   PUMPKIN_STEM: true
-  OAK_SAPLING: true
-  SPRUCE_SAPLING: true
-  BIRCH_SAPLING: true
-  JUNGLE_SAPLING: true
-  ACACIA_SAPLING: true
-  DARK_OAK_SAPLING: true
-  CHERRY_SAPLING: true
-  BAMBOO_SAPLING: true
-
-disabled-crops: []
+  ATTACHED_MELON_STEM: true
+  ATTACHED_PUMPKIN_STEM: true
+  PITCHER_CROP: true
+  TORCHFLOWER_CROP: true
+  BAMBOO: true

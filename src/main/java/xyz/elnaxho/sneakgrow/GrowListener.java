@@ -2,308 +2,214 @@ package xyz.elnaxho.sneakgrow;
 
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
-import org.bukkit.event.player.PlayerToggleSprintEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
-import org.bukkit.TreeType;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 import java.util.Random;
-import java.util.Set;
-import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-public class GrowListener implements Listener {
-    private final Main plugin;
+/**
+ * Handles both AutoGrow modes:
+ *
+ *  - Move Grow: triggers whenever the player moves into a new block.
+ *               Only advances Ageable crops (wheat, carrots, stems, etc).
+ *               Never touches saplings.
+ *
+ *  - Sneak Grow: triggers while the player is sneaking (both on the initial
+ *                toggle-sneak and on subsequent movement while sneaking).
+ *                Advances Ageable crops AND saplings.
+ *
+ * Sapling growth uses {@link Block#applyBoneMeal(BlockFace)}, which is
+ * vanilla's own bone-meal-application logic. This is deliberate: it means
+ * every current and future vanilla sapling layout (1x1 AND 2x2 giant trees -
+ * dark oak, spruce, jungle, pale oak, etc) is supported automatically,
+ * without hardcoding a Material -> TreeType map that would need to be
+ * updated every time Mojang adds a new tree type.
+ */
+public final class GrowListener implements Listener {
     private final ConfigManager config;
-    private final Set<java.util.UUID> enabledPlayers;
+    private final PlayerFeatureState state;
+    private final WorldGuardHook worldGuard;
+    private final DebugLogger debug;
     private final Random random = new Random();
-    private final Map<Material, TreeType> saplingTreeTypes = new HashMap<>();
-    private final Map<UUID, Long> lastBoneMealWarningTime = new HashMap<>();
 
-    public GrowListener(Main plugin, ConfigManager config, Set<java.util.UUID> enabledPlayers) {
-        this.plugin = plugin;
+    public GrowListener(ConfigManager config, PlayerFeatureState state, WorldGuardHook worldGuard, DebugLogger debug) {
         this.config = config;
-        this.enabledPlayers = enabledPlayers;
-        initializeSaplingTypes();
+        this.state = state;
+        this.worldGuard = worldGuard;
+        this.debug = debug;
     }
 
-    private void initializeSaplingTypes() {
-        saplingTreeTypes.put(Material.OAK_SAPLING, TreeType.TREE);
-        saplingTreeTypes.put(Material.SPRUCE_SAPLING, TreeType.REDWOOD);
-        saplingTreeTypes.put(Material.BIRCH_SAPLING, TreeType.BIRCH);
-        saplingTreeTypes.put(Material.JUNGLE_SAPLING, TreeType.JUNGLE);
-        saplingTreeTypes.put(Material.ACACIA_SAPLING, TreeType.ACACIA);
-        saplingTreeTypes.put(Material.DARK_OAK_SAPLING, TreeType.DARK_OAK);
-        saplingTreeTypes.put(Material.CHERRY_SAPLING, TreeType.CHERRY);
-    }
-
-    @EventHandler
-    public void onPlayerMove(PlayerMoveEvent event) {
+    @EventHandler(ignoreCancelled = true)
+    public void onMove(PlayerMoveEvent event) {
         if (!event.hasChangedBlock()) {
             return;
         }
         Player player = event.getPlayer();
-        if (!isEnabled(player)) {
+        boolean sneaking = player.isSneaking();
+        boolean sneakMode = sneaking && state.isSneakGrow(player.getUniqueId());
+        boolean moveMode = !sneaking && state.isMoveGrow(player.getUniqueId());
+
+        if (!sneakMode && !moveMode) {
             return;
         }
-        Location from = event.getFrom();
+        if (!hasFeaturePermission(player, sneakMode)) {
+            return;
+        }
+
         Location to = event.getTo();
         if (to == null) {
             return;
         }
 
-        List<Location> path = getPlayerBlockPath(from, to);
-        if (path.isEmpty()) {
-            return;
-        }
-        processGrowth(player, path);
+        debug.log(player.getName() + (sneakMode
+                ? " triggered Sneak Grow (moving while sneaking)."
+                : " triggered Movement Grow."));
+        runGrowth(player, to, sneakMode);
     }
 
-    @EventHandler
-    public void onPlayerToggleSneak(PlayerToggleSneakEvent event) {
+    @EventHandler(ignoreCancelled = true)
+    public void onToggleSneak(PlayerToggleSneakEvent event) {
         if (!event.isSneaking()) {
             return;
         }
         Player player = event.getPlayer();
-        if (!isEnabled(player)) {
+        if (!state.isSneakGrow(player.getUniqueId())) {
             return;
         }
-        processGrowth(player, player.getLocation());
-    }
-
-    @EventHandler
-    public void onPlayerToggleSprint(PlayerToggleSprintEvent event) {
-        if (!event.isSprinting()) {
+        if (!hasFeaturePermission(player, true)) {
             return;
         }
-        Player player = event.getPlayer();
-        if (!isEnabled(player)) {
+        debug.log(player.getName() + " triggered Sneak Grow (started sneaking).");
+        runGrowth(player, player.getLocation(), true);
+    }
+
+    private boolean hasFeaturePermission(Player player, boolean sneakMode) {
+        if (!player.hasPermission(Permissions.FEATURE_AUTOGROW)) {
+            debug.log(player.getName() + " denied AutoGrow: missing " + Permissions.FEATURE_AUTOGROW);
+            return false;
+        }
+        String specific = sneakMode ? Permissions.FEATURE_AUTOGROW_SNEAK : Permissions.FEATURE_AUTOGROW_MOVE;
+        if (!player.hasPermission(specific)) {
+            debug.log(player.getName() + " denied AutoGrow: missing " + specific);
+            return false;
+        }
+        return true;
+    }
+
+    private void runGrowth(Player player, Location center, boolean allowSaplings) {
+        if (!worldGuard.isAutoGrowAllowed(center)) {
+            debug.log("Region denied AutoGrow for " + player.getName() + " at " + describe(center));
             return;
         }
-        processGrowth(player, player.getLocation());
-    }
 
-    private boolean isEnabled(Player player) {
-        return enabledPlayers.contains(player.getUniqueId()) && player.hasPermission("sneakgrow.use");
-    }
-
-    private void processGrowth(Player player, Location center) {
-        processGrowth(player, List.of(center));
-    }
-
-    private void processGrowth(Player player, List<Location> path) {
         PlayerInventory inventory = player.getInventory();
-        if (config.isBoneMealUse() && !inventory.contains(Material.BONE_MEAL)) {
-            sendBoneMealWarning(player);
+
+        if (config.isAutoGrowBoneMealUse() && !inventory.contains(Material.BONE_MEAL)) {
+            debug.log(player.getName() + " has no bone meal - AutoGrow skipped.");
+            return;
+        }
+        if (config.isAutoGrowHoeUse() && !holdsOrCarriesHoe(inventory)) {
+            player.sendMessage(config.getMessageNoHoe());
+            debug.log(player.getName() + " has no hoe - AutoGrow skipped.");
             return;
         }
 
-        ItemStack hoe = null;
-        Integer hoeSlot = null;
-        if (config.isHoeUse()) {
-            ItemStack mainHand = inventory.getItemInMainHand();
-            if (isHoe(mainHand)) {
-                hoe = mainHand;
-                hoeSlot = inventory.getHeldItemSlot();
-            } else {
-                for (int slot = 0; slot < inventory.getSize(); slot++) {
-                    ItemStack stack = inventory.getItem(slot);
-                    if (isHoe(stack)) {
-                        hoe = stack;
-                        hoeSlot = slot;
-                        break;
-                    }
-                }
-            }
-            if (hoe == null) {
-                player.sendMessage(config.getMessageNoHoe());
+        int area = config.getAutoGrowArea();
+        int chance = config.getAutoGrowChance();
+        AtomicBoolean grewSomething = new AtomicBoolean(false);
+
+        AreaUtil.forEachInArea(center, area, block -> {
+            if (random.nextInt(100) >= chance) {
                 return;
             }
+            Material type = block.getType();
+            boolean grew;
+            if (isSapling(type)) {
+                grew = allowSaplings && growSapling(block);
+            } else {
+                grew = growAgeable(block);
+            }
+            if (grew) {
+                grewSomething.set(true);
+            }
+        });
+
+        if (grewSomething.get() && config.isAutoGrowBoneMealUse()) {
+            consumeOne(inventory, Material.BONE_MEAL);
         }
+    }
 
-        World world = player.getWorld();
-        int radius = config.getGrowthRadius();
-        int radiusSquared = radius * radius;
+    private boolean isSapling(Material material) {
+        return material.name().endsWith("_SAPLING") || material == Material.MANGROVE_PROPAGULE;
+    }
 
-        int changes = 0;
-        boolean hoeBroken = false;
+    private boolean growSapling(Block block) {
+        boolean grew = block.applyBoneMeal(BlockFace.UP);
+        if (grew) {
+            debug.log("Sapling successfully grown into a tree at " + describe(block.getLocation()));
+        }
+        return grew;
+    }
 
-        for (Location center : path) {
-            int centerX = center.getBlockX();
-            int centerY = center.getBlockY();
-            int centerZ = center.getBlockZ();
-            for (int dx = -radius; dx <= radius && !hoeBroken; dx++) {
-                for (int dy = -radius; dy <= radius && !hoeBroken; dy++) {
-                    for (int dz = -radius; dz <= radius && !hoeBroken; dz++) {
-                        if (dx * dx + dy * dy + dz * dz > radiusSquared) {
-                            continue;
-                        }
-                        Block block = world.getBlockAt(centerX + dx, centerY + dy, centerZ + dz);
-                        if (!config.isAllowedCrop(block.getType())) {
-                            continue;
-                        }
+    private boolean growAgeable(Block block) {
+        if (!(block.getBlockData() instanceof Ageable ageable)) {
+            return false;
+        }
+        int currentAge = ageable.getAge();
+        int maxAge = ageable.getMaximumAge();
+        if (currentAge >= maxAge) {
+            return false;
+        }
+        ageable.setAge(config.isAutoGrowStageGrowing() ? currentAge + 1 : maxAge);
+        block.setBlockData(ageable, true);
+        debug.log("Crop advanced at " + describe(block.getLocation()));
+        return true;
+    }
 
-                        if (!shouldGrow()) {
-                            continue;
-                        }
-
-                        if (tryGrowCrop(block)) {
-                            changes++;
-                            if (config.isBoneMealUse()) {
-                                consumeBoneMeal(inventory, player);
-                            }
-                            if (config.isHoeUse() && hoe != null && hoeSlot != null) {
-                                hoeBroken = damageHoe(hoe, hoeSlot, player);
-                            }
-                        }
-                    }
-                }
+    private boolean holdsOrCarriesHoe(PlayerInventory inventory) {
+        if (isHoe(inventory.getItemInMainHand())) {
+            return true;
+        }
+        for (ItemStack stack : inventory.getContents()) {
+            if (isHoe(stack)) {
+                return true;
             }
         }
-
-        if (changes > 0 && config.isHoeUse() && hoeBroken) {
-            // Stop further growth when the hoe breaks.
-        }
-    }
-
-    private void consumeBoneMeal(PlayerInventory inventory, Player player) {
-        int boneMealSlot = inventory.first(Material.BONE_MEAL);
-        if (boneMealSlot < 0) {
-            return;
-        }
-        ItemStack boneMeal = inventory.getItem(boneMealSlot);
-        if (boneMeal == null) {
-            return;
-        }
-
-        int amount = boneMeal.getAmount() - 1;
-        if (amount <= 0) {
-            inventory.setItem(boneMealSlot, null);
-        } else {
-            boneMeal.setAmount(amount);
-            inventory.setItem(boneMealSlot, boneMeal);
-        }
-    }
-
-    private void sendBoneMealWarning(Player player) {
-        long now = System.currentTimeMillis();
-        UUID playerId = player.getUniqueId();
-        long lastWarning = lastBoneMealWarningTime.getOrDefault(playerId, 0L);
-        if (now - lastWarning < config.getMessageNoBoneMealCooldownMs()) {
-            return;
-        }
-
-        lastBoneMealWarningTime.put(playerId, now);
-        player.sendTitle(config.getMessageNoBoneMealTitle(), "", 10, config.getMessageNoBoneMealTitleDuration(), 10);
+        return false;
     }
 
     private boolean isHoe(ItemStack itemStack) {
         return itemStack != null && itemStack.getType().name().endsWith("_HOE");
     }
 
-    private List<Location> getPlayerBlockPath(Location from, Location to) {
-        List<Location> path = new ArrayList<>();
-        int fromX = from.getBlockX();
-        int fromY = from.getBlockY();
-        int fromZ = from.getBlockZ();
-        int toX = to.getBlockX();
-        int toY = to.getBlockY();
-        int toZ = to.getBlockZ();
-
-        int dx = Integer.compare(toX, fromX);
-        int dy = Integer.compare(toY, fromY);
-        int dz = Integer.compare(toZ, fromZ);
-
-        int currentX = fromX;
-        int currentY = fromY;
-        int currentZ = fromZ;
-
-        path.add(from.clone());
-        while (currentX != toX || currentY != toY || currentZ != toZ) {
-            if (currentX != toX) {
-                currentX += dx;
-            }
-            if (currentY != toY) {
-                currentY += dy;
-            }
-            if (currentZ != toZ) {
-                currentZ += dz;
-            }
-            path.add(new Location(from.getWorld(), currentX, currentY, currentZ));
+    private void consumeOne(PlayerInventory inventory, Material material) {
+        int slot = inventory.first(material);
+        if (slot < 0) {
+            return;
         }
-        return path;
+        ItemStack stack = inventory.getItem(slot);
+        if (stack == null) {
+            return;
+        }
+        int amount = stack.getAmount() - 1;
+        inventory.setItem(slot, amount <= 0 ? null : withAmount(stack, amount));
     }
 
-    private boolean shouldGrow() {
-        int chance = config.getGrowthChance();
-        return random.nextInt(100) < chance;
+    private ItemStack withAmount(ItemStack stack, int amount) {
+        stack.setAmount(amount);
+        return stack;
     }
 
-    private boolean tryGrowCrop(Block block) {
-        Material material = block.getType();
-        if (saplingTreeTypes.containsKey(material)) {
-            return growSapling(block);
-        }
-
-        if (block.getBlockData() instanceof Ageable ageable) {
-            int currentAge = ageable.getAge();
-            int maxAge = ageable.getMaximumAge();
-            if (currentAge < maxAge) {
-                if (config.isStageGrowing()) {
-                    ageable.setAge(currentAge + 1);
-                } else {
-                    ageable.setAge(maxAge);
-                }
-                block.setBlockData(ageable, true);
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private boolean growSapling(Block block) {
-        World world = block.getWorld();
-        TreeType treeType = saplingTreeTypes.get(block.getType());
-        if (treeType == null) {
-            return false;
-        }
-        Location location = block.getLocation();
-        return world.generateTree(location, treeType);
-    }
-
-    private boolean damageHoe(ItemStack hoe, int slot, Player player) {
-        if (hoe == null || slot < 0) {
-            return false;
-        }
-        if (!hoe.hasItemMeta() || !(hoe.getItemMeta() instanceof org.bukkit.inventory.meta.Damageable)) {
-            return false;
-        }
-
-        org.bukkit.inventory.meta.Damageable damageMeta = (org.bukkit.inventory.meta.Damageable) hoe.getItemMeta();
-        int currentDamage = damageMeta.getDamage();
-        int newDamage = currentDamage + 1;
-        int maxDurability = hoe.getType().getMaxDurability();
-
-        if (newDamage >= maxDurability) {
-            player.getInventory().setItem(slot, null);
-            return true;
-        }
-
-        damageMeta.setDamage(newDamage);
-        hoe.setItemMeta((org.bukkit.inventory.meta.ItemMeta) damageMeta);
-        return false;
+    private String describe(Location location) {
+        return location.getBlockX() + "," + location.getBlockY() + "," + location.getBlockZ();
     }
 }

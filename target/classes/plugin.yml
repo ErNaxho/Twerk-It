@@ -1,18 +1,64 @@
 name: SneakGrow
 main: xyz.elnaxho.sneakgrow.Main
-version: 1.0.0
+version: 2.0.0
 api-version: '1.21'
-description: SneakGrow advances crops and trees when players sneak or sprint nearby.
+description: SneakGrow automatically grows crops/trees and plants seeds for players, with WorldGuard region support.
+author: elnaxho
+softdepend: [WorldGuard, FastAsyncWorldEdit, LuckPerms]
+
 commands:
   grow:
-    description: Toggle SneakGrow or reload configuration.
+    description: Toggle AutoGrow (Sneak + Move), or a specific mode.
     aliases: [sneakgrow]
-    usage: /grow [enable|disable|reload]
-    permission: sneakgrow.use
+    usage: /grow [sneak|move|reload]
+    permission: sneakgrow.command.grow
+  plant:
+    description: Toggle AutoPlant.
+    usage: /plant
+    permission: sneakgrow.command.plant
+
 permissions:
-  sneakgrow.use:
-    description: Allows a player to use SneakGrow.
+  sneakgrow.*:
+    description: Grants every SneakGrow permission.
+    default: false
+    children:
+      sneakgrow.command.grow: true
+      sneakgrow.command.grow.sneak: true
+      sneakgrow.command.grow.move: true
+      sneakgrow.command.plant: true
+      sneakgrow.command.reload: true
+      sneakgrow.feature.autogrow: true
+      sneakgrow.feature.autogrow.move: true
+      sneakgrow.feature.autogrow.sneak: true
+      sneakgrow.feature.autoplant: true
+
+  # --- Commands ---
+  sneakgrow.command.grow:
+    description: Allows using /grow to toggle both Sneak Grow and Move Grow together.
     default: true
-  sneakgrow.reload:
-    description: Allows a player to reload SneakGrow config.
+  sneakgrow.command.grow.sneak:
+    description: Allows using /grow sneak.
+    default: true
+  sneakgrow.command.grow.move:
+    description: Allows using /grow move.
+    default: true
+  sneakgrow.command.plant:
+    description: Allows using /plant to toggle AutoPlant.
+    default: true
+  sneakgrow.command.reload:
+    description: Allows reloading the SneakGrow configuration with /grow reload.
     default: op
+
+  # --- Features ---
+  sneakgrow.feature.autogrow:
+    description: Allows using AutoGrow at all (required alongside the sneak/move-specific nodes below).
+    default: true
+  sneakgrow.feature.autogrow.move:
+    description: Allows AutoGrow to trigger from movement (crops only, never saplings).
+    default: true
+  sneakgrow.feature.autogrow.sneak:
+    description: Allows AutoGrow to trigger while sneaking (crops and saplings).
+    default: true
+  sneakgrow.feature.autoplant:
+    description: Allows using AutoPlant.
+    default: true
